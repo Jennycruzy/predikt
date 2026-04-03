@@ -70,6 +70,7 @@ class MarketSummary(BaseModel):
     total_no: float = 0.0
     created_at: str
     deadline: str
+    resolved_yes: Optional[bool] = None   # True = YES won, False = NO won, None = unresolved
 
 
 class ValidatorStats(BaseModel):

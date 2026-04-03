@@ -136,6 +136,23 @@ export default function DashboardPage() {
   const yesOdds = (selectedMarket && totalPool > 0) ? ((selectedMarket.total_yes || 0) / totalPool * 100).toFixed(0) : "50";
   const noOdds = (selectedMarket && totalPool > 0) ? ((selectedMarket.total_no || 0) / totalPool * 100).toFixed(0) : "50";
 
+  // A market whose deadline has passed is expired regardless of what status the backend holds
+  const marketIsExpired = selectedMarket?.deadline ? new Date(selectedMarket.deadline) <= new Date() : false;
+  const isTrulySettled = selectedMarket ? ["resolved", "finalized", "cancelled"].includes(selectedMarket.status) : false;
+  const showAsExpired = marketIsExpired && !isTrulySettled;
+
+  // Resolved outcome — true = YES won, false = NO won, null = still open
+  const isFinalized = selectedMarket?.status === "finalized";
+  const resolvedYes: boolean | null = isFinalized && selectedMarket?.resolved_yes != null
+    ? selectedMarket.resolved_yes
+    : null;
+  const winnerLabel = resolvedYes === true ? "YES" : resolvedYes === false ? "NO" : null;
+  const winnerColor = resolvedYes === true ? "#00D4AA" : resolvedYes === false ? "#FF3366" : "#A855F7";
+
+  // When finalized, override odds bar to show 100% for winning side
+  const displayYesOdds = resolvedYes === true ? "100" : resolvedYes === false ? "0" : yesOdds;
+  const displayNoOdds  = resolvedYes === false ? "100" : resolvedYes === true ? "0" : noOdds;
+
   return (
     <div style={{ background: "#0E0D0A", color: "#F0ECE2", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif", position: "relative", overflow: "hidden" }}>
       <div className="grain-overlay" />
@@ -227,8 +244,9 @@ export default function DashboardPage() {
                 ? markets
                 : markets.filter(m => m.category === selectedCategory);
 
-              const activeList   = byCategory.filter(m => ACTIVE_STATUSES.includes(m.status));
-              const resolvedList = byCategory.filter(m => RESOLVED_STATUSES.includes(m.status));
+              const now = new Date();
+              const activeList   = byCategory.filter(m => ACTIVE_STATUSES.includes(m.status) && !(m.deadline && new Date(m.deadline) <= now));
+              const resolvedList = byCategory.filter(m => RESOLVED_STATUSES.includes(m.status) || (ACTIVE_STATUSES.includes(m.status) && m.deadline && new Date(m.deadline) <= now));
 
               const visibleActive   = marketStatusFilter === "resolved" ? [] : activeList;
               const visibleResolved = marketStatusFilter === "active"   ? [] : resolvedList;
@@ -301,7 +319,14 @@ export default function DashboardPage() {
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                        <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 10, background: `${STATUS_COLORS[selectedMarket.status as keyof typeof STATUS_COLORS] || "#666"}15`, color: STATUS_COLORS[selectedMarket.status as keyof typeof STATUS_COLORS] || "#666", fontFamily: "'DM Mono', monospace", fontWeight: 600 }}>{selectedMarket.status.toUpperCase()}</span>
+                        {(() => {
+                          const badgeColor = showAsExpired ? "#FF6B35" : (STATUS_COLORS[selectedMarket.status as keyof typeof STATUS_COLORS] || "#666");
+                          return (
+                            <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 10, background: `${badgeColor}15`, color: badgeColor, fontFamily: "'DM Mono', monospace", fontWeight: 600 }}>
+                              {showAsExpired ? "EXPIRED" : selectedMarket.status.toUpperCase()}
+                            </span>
+                          );
+                        })()}
                         <span style={{ fontSize: 11, color: "rgba(240,236,226,0.35)", fontFamily: "'DM Mono', monospace" }}>{selectedMarket.id}</span>
                         {totalPool > 0 && (
                           <span style={{ fontSize: 11, color: "rgba(240,236,226,0.4)", fontFamily: "'DM Mono', monospace", background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: "2px 8px" }}>
@@ -311,7 +336,7 @@ export default function DashboardPage() {
                       </div>
                       <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, lineHeight: 1.3, letterSpacing: "-0.02em", maxWidth: 700 }}>{selectedMarket.question}</h2>
                     </div>
-                    {!["finalized", "resolved", "cancelled"].includes(selectedMarket.status) && (
+                    {!showAsExpired && !["finalized", "resolved", "cancelled"].includes(selectedMarket.status) && (
                       <button onClick={() => runDebate(selectedMarket)} disabled={isDebating}
                         style={{ background: isDebating ? "rgba(255,255,255,0.06)" : "linear-gradient(135deg, #FF6B35, #FF3366)", border: "none", borderRadius: 12, padding: "12px 24px", color: isDebating ? "rgba(240,236,226,0.5)" : "#fff", fontWeight: 700, fontSize: 14, cursor: isDebating ? "default" : "pointer", whiteSpace: "nowrap", fontFamily: "'DM Sans', sans-serif" }}>
                         {isDebating ? debateStep : "⚡ Launch Debate"}
@@ -319,16 +344,27 @@ export default function DashboardPage() {
                     )}
                   </div>
 
-                  {/* Odds bar */}
+                  {/* Resolution outcome banner */}
+                  {winnerLabel && (
+                    <div style={{ marginTop: 16, background: `${winnerColor}10`, border: `1px solid ${winnerColor}30`, borderRadius: 10, padding: "10px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ fontSize: 20 }}>{winnerLabel === "YES" ? "✅" : "❌"}</span>
+                      <div>
+                        <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: winnerColor, fontFamily: "'DM Mono', monospace" }}>{winnerLabel} WON</p>
+                        <p style={{ margin: 0, fontSize: 11, color: "rgba(240,236,226,0.4)" }}>Market resolved · Winning stakers can claim payouts below</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Odds bar — shows 100/0 when resolved */}
                   {totalPool > 0 && (
-                    <div style={{ marginTop: 16 }}>
+                    <div style={{ marginTop: 12 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                        <span style={{ fontSize: 11, color: "#00D4AA", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>YES {yesOdds}%</span>
-                        <span style={{ fontSize: 11, color: "#FF3366", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>NO {noOdds}%</span>
+                        <span style={{ fontSize: 11, color: resolvedYes === false ? "rgba(0,212,170,0.3)" : "#00D4AA", fontFamily: "'DM Mono', monospace", fontWeight: resolvedYes === true ? 800 : 600 }}>YES {displayYesOdds}%{resolvedYes === true ? " ✓" : ""}</span>
+                        <span style={{ fontSize: 11, color: resolvedYes === true ? "rgba(255,51,102,0.3)" : "#FF3366", fontFamily: "'DM Mono', monospace", fontWeight: resolvedYes === false ? 800 : 600 }}>NO {displayNoOdds}%{resolvedYes === false ? " ✓" : ""}</span>
                       </div>
                       <div style={{ display: "flex", height: 6, borderRadius: 3, overflow: "hidden", background: "rgba(255,255,255,0.06)" }}>
-                        <div style={{ width: `${yesOdds}%`, background: "#00D4AA", borderRadius: "3px 0 0 3px", transition: "width 0.5s" }} />
-                        <div style={{ width: `${noOdds}%`, background: "#FF3366", borderRadius: "0 3px 3px 0", transition: "width 0.5s" }} />
+                        <div style={{ width: `${displayYesOdds}%`, background: resolvedYes === false ? "rgba(0,212,170,0.2)" : "#00D4AA", borderRadius: "3px 0 0 3px", transition: "width 0.8s" }} />
+                        <div style={{ width: `${displayNoOdds}%`, background: resolvedYes === true ? "rgba(255,51,102,0.2)" : "#FF3366", borderRadius: "0 3px 3px 0", transition: "width 0.8s" }} />
                       </div>
                     </div>
                   )}
@@ -349,21 +385,31 @@ export default function DashboardPage() {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
                     <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 16, padding: 24, border: "1px solid rgba(255,255,255,0.04)", display: "flex", flexDirection: "column", alignItems: "center" }}>
                       <h3 style={{ margin: "0 0 8px", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(240,236,226,0.35)", fontFamily: "'DM Mono', monospace", alignSelf: "flex-start" }}>Final Predikt</h3>
-                      <PrediktGauge value={selectedMarket.predikt} confidence={selectedMarket.confidence} size={220} />
-                      {selectedMarket.predikt != null && (
-                        <div style={{ display: "flex", gap: 20, marginTop: 12 }}>
-                          {[{ label: "validators", val: selectedMarket.validator_count || 0 }, { label: "rounds", val: selectedMarket.debate_rounds?.length || 0 }, { label: "challenges", val: selectedMarket.debate_rounds?.reduce((a: number, r: any) => a + (r.critiques?.length || 0), 0) || 0 }].map((s) => (
-                            <div key={s.label} style={{ textAlign: "center" }}>
-                              <div style={{ fontSize: 10, color: "rgba(240,236,226,0.35)", fontFamily: "'DM Mono', monospace" }}>{s.label}</div>
-                              <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "'DM Mono', monospace" }}>{s.val}</div>
-                            </div>
-                          ))}
+                      {showAsExpired && selectedMarket.predikt == null ? (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, gap: 10, padding: "24px 0" }}>
+                          <span style={{ fontSize: 36 }}>⏰</span>
+                          <p style={{ margin: 0, fontWeight: 700, color: "#FF6B35", fontFamily: "'DM Mono', monospace", fontSize: 13 }}>Market Expired</p>
+                          <p style={{ margin: 0, fontSize: 11, color: "rgba(240,236,226,0.35)", textAlign: "center", lineHeight: 1.5 }}>AI validators are resolving this market.<br />Results will appear here shortly.</p>
                         </div>
+                      ) : (
+                        <>
+                          <PrediktGauge value={selectedMarket.predikt} confidence={selectedMarket.confidence} size={220} />
+                          {selectedMarket.predikt != null && (
+                            <div style={{ display: "flex", gap: 20, marginTop: 12 }}>
+                              {[{ label: "validators", val: selectedMarket.validator_count || 0 }, { label: "rounds", val: selectedMarket.debate_rounds?.length || 0 }, { label: "challenges", val: selectedMarket.debate_rounds?.reduce((a: number, r: any) => a + (r.critiques?.length || 0), 0) || 0 }].map((s) => (
+                                <div key={s.label} style={{ textAlign: "center" }}>
+                                  <div style={{ fontSize: 10, color: "rgba(240,236,226,0.35)", fontFamily: "'DM Mono', monospace" }}>{s.label}</div>
+                                  <div style={{ fontSize: 18, fontWeight: 800, fontFamily: "'DM Mono', monospace" }}>{s.val}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                     <div style={{ background: "rgba(255,255,255,0.02)", borderRadius: 16, padding: 24, border: "1px solid rgba(255,255,255,0.04)" }}>
                       <h3 style={{ margin: "0 0 16px", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(240,236,226,0.35)", fontFamily: "'DM Mono', monospace" }}>Prediction Spread</h3>
-                      {selectedMarket.validators?.length ? <PredictionDistribution validators={selectedMarket.validators} /> : <p style={{ color: "rgba(240,236,226,0.3)", fontStyle: "italic", fontSize: 13 }}>Launch debate to see predictions</p>}
+                      {selectedMarket.validators?.length ? <PredictionDistribution validators={selectedMarket.validators} /> : <p style={{ color: "rgba(240,236,226,0.3)", fontStyle: "italic", fontSize: 13 }}>{showAsExpired ? "Resolution in progress…" : "Launch debate to see predictions"}</p>}
                     </div>
                     <div style={{ gridColumn: "1 / -1", background: "rgba(255,255,255,0.02)", borderRadius: 16, padding: 24, border: "1px solid rgba(255,255,255,0.04)" }}>
                       <h3 style={{ margin: "0 0 16px", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(240,236,226,0.35)", fontFamily: "'DM Mono', monospace" }}>Validator Leaderboard</h3>
@@ -390,18 +436,54 @@ export default function DashboardPage() {
                           <p style={{ color: "rgba(240,236,226,0.4)", marginBottom: 16 }}>Connect wallet to stake mUSDL</p>
                           <WalletConnect />
                         </div>
-                      ) : !["open", "active"].includes(selectedMarket.status) ? (
+                      ) : (showAsExpired || !["open", "active"].includes(selectedMarket.status)) ? (
                         <div style={{ textAlign: "center", padding: 40 }}>
-                          <p style={{ color: "rgba(240,236,226,0.4)", marginBottom: 16 }}>This market is <strong style={{ color: selectedMarket.status === "finalized" ? "#A855F7" : "#FFB347" }}>{selectedMarket.status}</strong>. Staking is closed.</p>
-                          {selectedMarket.status === "finalized" && (
+                          {showAsExpired ? (
                             <>
-                              <p style={{ fontSize: 12, color: "rgba(240,236,226,0.4)", marginBottom: 12 }}>If you staked on the winning side, claim your mUSDL now.</p>
+                              <div style={{ fontSize: 36, marginBottom: 12 }}>⏰</div>
+                              <p style={{ color: "#FF6B35", fontWeight: 700, marginBottom: 8, fontFamily: "'DM Mono', monospace", fontSize: 13 }}>Market Expired</p>
+                              <p style={{ fontSize: 12, color: "rgba(240,236,226,0.4)", marginBottom: 20, lineHeight: 1.5 }}>Staking is closed. If you backed the winning outcome, claim your winnings below.</p>
                               <button
                                 onClick={() => claimWinnings(selectedMarket.id)}
                                 disabled={txPending}
-                                style={{ background: txPending ? "rgba(255,255,255,0.06)" : "linear-gradient(135deg, #A855F7, #7C3AED)", border: "none", borderRadius: 12, padding: "14px 32px", color: "#fff", fontWeight: 800, fontSize: 16, cursor: txPending ? "default" : "pointer", fontFamily: "'DM Sans', sans-serif" }}>
+                                style={{ background: txPending ? "rgba(255,255,255,0.06)" : "linear-gradient(135deg, #00D4AA, #A855F7)", border: "none", borderRadius: 12, padding: "14px 32px", color: txPending ? "rgba(240,236,226,0.4)" : "#fff", fontWeight: 800, fontSize: 16, cursor: txPending ? "default" : "pointer", fontFamily: "'DM Sans', sans-serif" }}>
                                 {txPending ? "Claiming..." : "💰 Cashout Winnings"}
                               </button>
+                            </>
+                          ) : (
+                            <>
+                              {winnerLabel ? (
+                                <>
+                                  <div style={{ fontSize: 32, marginBottom: 8 }}>{winnerLabel === "YES" ? "✅" : "❌"}</div>
+                                  <p style={{ color: winnerColor, fontWeight: 800, marginBottom: 6, fontFamily: "'DM Mono', monospace", fontSize: 16 }}>{winnerLabel} WON</p>
+                                  {totalPool > 0 && (
+                                    <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "10px 16px", marginBottom: 16, textAlign: "left" }}>
+                                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                                        <span style={{ fontSize: 11, color: "rgba(240,236,226,0.4)" }}>Winning pool</span>
+                                        <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "'DM Mono', monospace", color: winnerColor }}>
+                                          {(winnerLabel === "YES" ? selectedMarket.total_yes : selectedMarket.total_no || 0).toLocaleString()} mUSDL staked
+                                        </span>
+                                      </div>
+                                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                        <span style={{ fontSize: 11, color: "rgba(240,236,226,0.4)" }}>Total payout pool</span>
+                                        <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "'DM Mono', monospace" }}>
+                                          {(totalPool * 0.98).toFixed(0)} mUSDL (after 2% fee)
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
+                                  <p style={{ fontSize: 12, color: "rgba(240,236,226,0.4)", marginBottom: 16 }}>If you staked on {winnerLabel}, claim your proportional share of the pool now.</p>
+                                  <button onClick={() => claimWinnings(selectedMarket.id)} disabled={txPending}
+                                    style={{ background: txPending ? "rgba(255,255,255,0.06)" : `linear-gradient(135deg, ${winnerColor}, #A855F7)`, border: "none", borderRadius: 12, padding: "14px 32px", color: txPending ? "rgba(240,236,226,0.4)" : "#fff", fontWeight: 800, fontSize: 16, cursor: txPending ? "default" : "pointer", fontFamily: "'DM Sans', sans-serif" }}>
+                                    {txPending ? "Claiming..." : "💰 Cashout Winnings"}
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <p style={{ color: "rgba(240,236,226,0.4)", marginBottom: 16 }}>This market is <strong style={{ color: "#FFB347" }}>{selectedMarket.status}</strong>. Staking is closed.</p>
+                                  <p style={{ fontSize: 12, color: "rgba(240,236,226,0.4)" }}>Outcome is being determined by AI validators.</p>
+                                </>
+                              )}
                             </>
                           )}
                         </div>

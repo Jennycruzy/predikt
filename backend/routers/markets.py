@@ -69,6 +69,7 @@ async def list_markets():
             total_no        = float(m.get("total_no", 0.0)),
             created_at      = m.get("created_at", datetime.now(timezone.utc).isoformat()),
             deadline        = m.get("deadline", ""),
+            resolved_yes    = m.get("resolved_yes"),
         ))
 
     result = MarketListResponse(markets=markets)

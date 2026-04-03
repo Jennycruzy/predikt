@@ -27,8 +27,60 @@ from backend.services.llm import parse_json
 
 # Intervals (seconds)
 GENERATION_INTERVAL = 6 * 3600   # new market every 6 hours
-JUDGING_INTERVAL    = 15 * 60    # check for expired markets every 15 min
+JUDGING_INTERVAL    = 2 * 60     # check for expired markets every 2 min
 FIRST_BATCH         = bool(os.getenv("GENERATE_INITIAL_BATCH", "true").lower() == "true")
+
+
+# ── Real-world outcome determination ────────────────────────────────────────
+
+async def determine_actual_outcome(question: str, category: str, deadline: str) -> tuple:
+    """
+    Ask Venice AI to determine the ACTUAL real-world outcome — did the event
+    happen (YES) or not (NO)?  This is a factual query, not a prediction.
+    Returns (resolved_yes: bool | None, confidence: float).
+    None means the call failed and the caller should fall back to debate consensus.
+    """
+    from backend.services.llm import llm_service, parse_json
+
+    system_prompt = (
+        "You are a market resolution judge for a prediction market platform. "
+        "Your sole job is to determine whether a prediction market question resolved "
+        "YES or NO based on what ACTUALLY happened in the real world by the deadline. "
+        "Use your knowledge of real events, prices, and outcomes. "
+        "Do NOT predict what will happen — determine what DID happen. "
+        "Be definitive. Output only valid JSON."
+    )
+
+    user_prompt = (
+        f"Market question: {question}\n"
+        f"Category: {category}\n"
+        f"Resolution deadline: {deadline}\n\n"
+        "Did this event actually occur / resolve YES or NO by the deadline?\n"
+        "Answer ONLY with this JSON (no other text):\n"
+        '{"outcome": "YES" or "NO", "confidence": <integer 0-100>, '
+        '"reasoning": "<one sentence: what actually happened>"}'
+    )
+
+    try:
+        resp = await llm_service._call(
+            model="llama-3.3-70b",
+            system=system_prompt,
+            user=user_prompt,
+            temperature=0.1,
+            max_tokens=200,
+        )
+        data = parse_json(resp.content)
+        if not data or "outcome" not in data:
+            return None, 0.5
+        outcome_str = str(data.get("outcome", "")).strip().upper()
+        confidence  = float(data.get("confidence", 50)) / 100.0
+        reasoning   = data.get("reasoning", "")
+        resolved_yes = outcome_str == "YES"
+        print(f"[DAEMON] Real-world outcome: {outcome_str} (conf={confidence:.0%}) — {reasoning}")
+        return resolved_yes, confidence
+    except Exception as exc:
+        print(f"[DAEMON] Real-world outcome call failed: {exc}")
+        return None, 0.5
 
 
 # ── Debate + resolution pipeline ─────────────────────────────────────────────
@@ -132,8 +184,22 @@ async def run_debate_and_resolve(market_id: int, market: dict) -> None:
     # ── Phase 8: Update reputations ───────────────────────────────────────────
     reputation_manager.update_after_predikt(predictions, predikt_val)
 
-    # ── Phase 9: Bridge to Base Sepolia ───────────────────────────────────────
-    resolved_yes = predikt_val >= 0.5
+    # ── Phase 9: Determine actual real-world outcome ──────────────────────────
+    # Primary: ask Venice AI what ACTUALLY happened (factual, not predictive).
+    # Fallback: use debate consensus (predikt >= 0.5) if the factual call fails.
+    actual_yes, actual_conf = await determine_actual_outcome(
+        question=question,
+        category=category,
+        deadline=market.get("deadline", ""),
+    )
+    if actual_yes is not None:
+        resolved_yes = actual_yes
+        print(f"[DAEMON] Using real-world outcome: YES={resolved_yes} (conf={actual_conf:.0%})")
+    else:
+        resolved_yes = predikt_val >= 0.5
+        print(f"[DAEMON] Falling back to debate consensus: YES={resolved_yes} (predikt={predikt_val:.1%})")
+
+    # ── Phase 10: Bridge to Base Sepolia ──────────────────────────────────────
     await chain_service.resolve_on_base_sepolia(
         market_id=market_id,
         resolved_yes=resolved_yes,
