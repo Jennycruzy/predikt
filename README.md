@@ -122,11 +122,11 @@ Claim free mUSDL tokens:
 - Real ERC-20 token on Base Sepolia
 
 ### 6. Wallet Integration
-Connect with Privy:
-- MetaMask, WalletConnect, Magic Link
+Connect with RainbowKit:
+- MetaMask, WalletConnect, and injected wallets
 - Base Sepolia + GenLayer Studionet support
 - Balance tracking
-- Transaction signing
+- Transaction signing via Wagmi + Viem
 
 ---
 
@@ -192,7 +192,7 @@ When market deadline passes:
 - **Styling:** TailwindCSS
 - **Visualization:** D3.js + Framer Motion
 - **Blockchain:** ethers.js
-- **Wallet:** Privy (@privy-io/react-auth)
+- **Wallet:** RainbowKit + Wagmi + Viem
 - **HTTP:** React Query + fetch
 
 ### Blockchain
@@ -243,7 +243,7 @@ cp .env.example .env
 1. **GenLayer Studionet** - Contract address
 2. **Base Sepolia** - RPC endpoint
 3. **LLM APIs** - OpenAI, Anthropic, Google, or Together AI key
-4. **Privy** - Wallet integration app ID
+4. **WalletConnect** - Project ID (from cloud.walletconnect.com)
 5. **Database** - PostgreSQL connection string
 
 See [SETUP-GUIDE.md](./SETUP-GUIDE.md) for detailed instructions.
@@ -262,6 +262,27 @@ Opens:
 - Frontend: http://localhost:3000
 - Backend: http://localhost:8000
 - Database: PostgreSQL on :5432
+
+---
+
+## 🔮 Roadmap
+
+What's coming next for PREDIKT:
+
+### Token & Asset Layer
+- **Custom Token Creation** — Users will be able to deploy and stake with their own ERC-20 tokens, not just mUSDL. Create a market, define your staking token, and let the community participate with assets they already hold.
+- **Token-Gated Markets** — Restrict market participation to holders of a specific token for community-specific prediction pools.
+
+### Multi-Chain Expansion
+- **Ethereum Mainnet** — Full deployment on mainnet for high-stakes markets with real economic weight.
+- **Arbitrum & Optimism** — L2 deployments for low-fee, high-throughput staking.
+- **Polygon** — Broad accessibility for users across the ecosystem.
+- **Cross-Chain Resolution** — Markets created on one chain resolved by oracles and AI validators across chains via LayerZero (architecture already bridge-ready).
+
+### Platform
+- **Market Categories & Tagging** — Richer categorisation and search across Crypto, Science, Technology, Politics, and more.
+- **On-Chain Resolution Oracles** — Automated resolution via price feeds and verified news sources, reducing reliance on manual settlement.
+- **Validator Marketplace** — Third-party AI validators that can register, stake reputation, and earn fees for accurate predictions.
 
 ---
 

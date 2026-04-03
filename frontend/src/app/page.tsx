@@ -13,7 +13,7 @@ import FaucetModal from "../components/FaucetModal";
 import WalletConnect from "../components/WalletConnect";
 import { useAccount } from "wagmi";
 import useContract from "../hooks/useContract";
-import { VALIDATORS, STATUS_COLORS, STAKING_CONFIG, TOKEN_CONFIG } from "../lib/constants";
+import { VALIDATORS, STATUS_COLORS, STAKING_CONFIG, TOKEN_CONFIG, CATEGORIES } from "../lib/constants";
 
 // Sample data removed for real-world integration
 
@@ -32,6 +32,8 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [stakePosition, setStakePosition] = useState<"YES" | "NO">("YES");
   const [stakeAmount, setStakeAmount] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [marketStatusFilter, setMarketStatusFilter] = useState<"active" | "resolved" | "all">("active");
 
   const { isConnected: walletConnected, address: walletAddress } = useAccount();
   const { wallet, userPosition, txPending, claimFaucet, placeBet, createMarket, claimWinnings, refreshData } = useContract();
@@ -182,12 +184,104 @@ export default function DashboardPage() {
         {/* ═══ MAIN GRID ═══ */}
         <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 24, minHeight: "calc(100vh - 120px)" }}>
           {/* Sidebar */}
-          <aside style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <h3 style={{ margin: "0 0 8px", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(240,236,226,0.35)", fontFamily: "'DM Mono', monospace" }}>Active Markets</h3>
-            {markets.map((m) => (
-              <MarketCard key={m.id} market={m} selected={selectedMarket?.id === m.id}
-                onClick={() => { setSelectedMarket(m); setActiveTab("predikt"); }} />
-            ))}
+          <aside style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {/* Category filter pills */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
+              {[{ id: "all", label: "All", icon: "◈" }, ...CATEGORIES.filter(c => markets.some(m => m.category === c.id))].map(cat => (
+                <button key={cat.id} onClick={() => setSelectedCategory(cat.id)}
+                  style={{
+                    background: selectedCategory === cat.id ? "rgba(0,212,170,0.12)" : "rgba(255,255,255,0.03)",
+                    border: selectedCategory === cat.id ? "1px solid rgba(0,212,170,0.3)" : "1px solid rgba(255,255,255,0.06)",
+                    borderRadius: 8, padding: "4px 10px", color: selectedCategory === cat.id ? "#00D4AA" : "rgba(240,236,226,0.45)",
+                    fontSize: 10, cursor: "pointer", fontFamily: "'DM Mono', monospace", fontWeight: 600,
+                    transition: "all 0.15s",
+                  }}>
+                  {cat.icon} {cat.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Status sub-tabs */}
+            <div style={{ display: "flex", gap: 2, marginBottom: 12, background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 3 }}>
+              {(["active", "resolved", "all"] as const).map(s => (
+                <button key={s} onClick={() => setMarketStatusFilter(s)}
+                  style={{
+                    flex: 1, background: marketStatusFilter === s ? "rgba(240,236,226,0.07)" : "transparent",
+                    border: "none", borderRadius: 6, padding: "5px 0",
+                    color: marketStatusFilter === s ? "#F0ECE2" : "rgba(240,236,226,0.35)",
+                    fontSize: 10, cursor: "pointer", fontFamily: "'DM Mono', monospace",
+                    fontWeight: marketStatusFilter === s ? 700 : 500, textTransform: "uppercase", letterSpacing: "0.06em",
+                    transition: "all 0.15s",
+                  }}>
+                  {s}
+                </button>
+              ))}
+            </div>
+
+            {/* Market list */}
+            {(() => {
+              const ACTIVE_STATUSES = ["active", "open", "debating", "resolving"];
+              const RESOLVED_STATUSES = ["resolved", "finalized", "undetermined", "cancelled"];
+
+              const byCategory = selectedCategory === "all"
+                ? markets
+                : markets.filter(m => m.category === selectedCategory);
+
+              const activeList   = byCategory.filter(m => ACTIVE_STATUSES.includes(m.status));
+              const resolvedList = byCategory.filter(m => RESOLVED_STATUSES.includes(m.status));
+
+              const visibleActive   = marketStatusFilter === "resolved" ? [] : activeList;
+              const visibleResolved = marketStatusFilter === "active"   ? [] : resolvedList;
+
+              if (byCategory.length === 0) {
+                return (
+                  <p style={{ fontSize: 11, color: "rgba(240,236,226,0.25)", fontFamily: "'DM Mono', monospace", textAlign: "center", marginTop: 32 }}>
+                    No markets in this category
+                  </p>
+                );
+              }
+
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {/* Active section */}
+                  {visibleActive.length > 0 && (
+                    <>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "4px 0 4px" }}>
+                        <span style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: "#00D4AA", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>Active</span>
+                        <span style={{ fontSize: 9, color: "rgba(0,212,170,0.4)", fontFamily: "'DM Mono', monospace" }}>{visibleActive.length}</span>
+                        <div style={{ flex: 1, height: 1, background: "rgba(0,212,170,0.12)" }} />
+                      </div>
+                      {visibleActive.map(m => (
+                        <MarketCard key={m.id} market={m} selected={selectedMarket?.id === m.id}
+                          onClick={() => { setSelectedMarket(m); setActiveTab("predikt"); }} />
+                      ))}
+                    </>
+                  )}
+
+                  {/* Resolved section */}
+                  {visibleResolved.length > 0 && (
+                    <>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "8px 0 4px" }}>
+                        <span style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: "#A855F7", fontFamily: "'DM Mono', monospace", fontWeight: 700 }}>Resolved</span>
+                        <span style={{ fontSize: 9, color: "rgba(168,85,247,0.4)", fontFamily: "'DM Mono', monospace" }}>{visibleResolved.length}</span>
+                        <div style={{ flex: 1, height: 1, background: "rgba(168,85,247,0.12)" }} />
+                      </div>
+                      {visibleResolved.map(m => (
+                        <MarketCard key={m.id} market={m} selected={selectedMarket?.id === m.id}
+                          onClick={() => { setSelectedMarket(m); setActiveTab("predikt"); }} />
+                      ))}
+                    </>
+                  )}
+
+                  {/* Empty state for the current filter */}
+                  {visibleActive.length === 0 && visibleResolved.length === 0 && (
+                    <p style={{ fontSize: 11, color: "rgba(240,236,226,0.25)", fontFamily: "'DM Mono', monospace", textAlign: "center", marginTop: 32 }}>
+                      No {marketStatusFilter === "all" ? "" : marketStatusFilter} markets here
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           </aside>
 
           {/* Main Content */}
