@@ -6,6 +6,7 @@ contracts + Venice AI news analysis). Users cannot create markets directly —
 staking on YES/NO happens through the Base Sepolia BetFactory contracts.
 """
 
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
@@ -14,6 +15,10 @@ from backend.models.schemas import MarketSummary, MarketListResponse
 from backend.services.chain import chain_service
 
 router = APIRouter(tags=["markets"])
+
+# ── Simple in-memory cache (30 s TTL) ────────────────────────────────────────
+_cache: dict = {"ts": 0.0, "data": None}
+_CACHE_TTL = 30  # seconds
 
 
 # ── List markets ──────────────────────────────────────────────────────────────
@@ -24,7 +29,12 @@ async def list_markets():
     Return all prediction markets.
     Primary source: GenLayer Studionet intelligent contract.
     Fallback: Base Sepolia BetFactory (includes live stake totals).
+    Cached for 30 s to avoid re-fetching 40+ contracts on every request.
     """
+    now = time.time()
+    if _cache["data"] is not None and now - _cache["ts"] < _CACHE_TTL:
+        return _cache["data"]
+
     gl_markets = []
     try:
         gl_markets = await chain_service.get_all_markets_onchain()
@@ -61,7 +71,10 @@ async def list_markets():
             deadline        = m.get("deadline", ""),
         ))
 
-    return MarketListResponse(markets=markets)
+    result = MarketListResponse(markets=markets)
+    _cache["ts"] = time.time()
+    _cache["data"] = result
+    return result
 
 
 # ── Single market ─────────────────────────────────────────────────────────────
