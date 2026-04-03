@@ -1,0 +1,27 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+pydantic==2.9.0
+python-dotenv==1.0.1
+
+# Async HTTP (replaces requests for GenLayer RPC)
+httpx==0.27.0
+aiofiles==23.2.1
+
+# Blockchain
+web3==6.20.0
+eth-account>=0.10.0
+
+# LLM APIs (Venice AI uses OpenAI-compatible SDK)
+openai>=1.50.0
+
+# Database (optional, for future persistence)
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.13.0
+
+# Utilities
+python-multipart==0.0.6
+
+# GenLayer intelligent contract runtime (used inside contracts)
+# The external SDK is genlayer-py-sdk; we interact via JSON-RPC directly
+genlayer
