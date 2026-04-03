@@ -6,9 +6,10 @@ FastAPI application entry point.
 Registers all routers and configures middleware.
 """
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import os
+import os, asyncio
 
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), '../.env'))
@@ -28,8 +29,22 @@ if os.getenv("DATABASE_URL"):
 # App Configuration
 # ═══════════════════════════════════════════════════════
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Pre-warm the markets cache so the first Vercel request doesn't cold-start
+    async def _warm():
+        try:
+            from backend.routers.markets import list_markets
+            await list_markets()
+            print("[STARTUP] Markets cache warmed.")
+        except Exception as e:
+            print(f"[STARTUP] Cache warm failed (non-fatal): {e}")
+    asyncio.create_task(_warm())
+    yield
+
 app = FastAPI(
     title="PREDIKT",
+    lifespan=lifespan,
     description=(
         "AI-powered prediction market backend. "
         "Reasoning-driven predikt engine for GenLayer Studionet."
@@ -43,7 +58,7 @@ _ALLOWED_ORIGINS = [
     o.strip()
     for o in os.getenv(
         "CORS_ORIGINS",
-        "http://localhost:3000,http://localhost:3001,https://predikt.vercel.app",
+        "http://localhost:3000,http://localhost:3001,https://predikt.vercel.app,https://*.netlify.app,https://*.pages.dev",
     ).split(",")
     if o.strip()
 ]
