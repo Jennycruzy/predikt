@@ -171,11 +171,34 @@ When market deadline passes:
 
 ## 🏗️ Technology Stack
 
+### AI — Venice Privacy Stack
+PREDIKT uses **[Venice AI](https://venice.ai/)** as its primary LLM provider for all validator inference, debate rounds, and market resolution.
+
+Venice is a privacy-preserving AI platform — prompts and responses are **never logged, stored, or used for training**. This matters for a prediction market because:
+
+- **Validator reasoning stays private** — debate logic and staking signals are not exposed to third parties
+- **No data retention** — Venice processes and immediately discards all inference requests
+- **Uncensored models** — validators can reason freely about financial, political, and sensitive market topics without content filtering interfering with predictions
+- **Decentralisation alignment** — Venice's architecture matches PREDIKT's ethos: no central authority controlling the AI layer
+
+**Models in use (via Venice):**
+| Validator Persona | Venice Model | Style |
+|-------------------|-------------|-------|
+| gpt-4o (analytical) | `llama-3.3-70b` | Quantitative, data-driven |
+| claude-sonnet (nuanced) | `mistral-31-24b` | Balanced, epistemic humility |
+| gemini-pro (optimistic) | `llama-3.3-70b` | Momentum, trend-following |
+| llama-3 (contrarian) | `mistral-31-24b` | Skeptical, base-rate focused |
+| mistral-large (pragmatic) | `llama-3.3-70b` | Precedent, institutional dynamics |
+
+Resolution calls (determining actual real-world outcomes) also run through Venice at low temperature (0.1) for factual accuracy.
+
+---
+
 ### Backend
 - **API:** FastAPI + Uvicorn
 - **Database:** PostgreSQL + SQLAlchemy ORM
 - **Smart Contracts:** GenLayer Studionet (Python)
-- **LLM APIs:** OpenAI, Anthropic, Google, Together AI
+- **LLM / AI:** Venice AI (privacy-preserving, uncensored inference)
 - **Validation:** Pydantic
 
 **7 Database Models:**
@@ -307,7 +330,7 @@ MIT License - See LICENSE file for details.
 
 - Built with [GenLayer Studionet](https://genlayer.com/) intelligent contracts
 - Inspired by [courtofinternet/pm-kit](https://github.com/courtofinternet/pm-kit) architecture
-- AI validators powered by OpenAI, Anthropic, Google, and Together AI
+- AI validators and market resolution powered by [Venice AI](https://venice.ai/) — private, uncensored, decentralised inference
 
 ---
 
